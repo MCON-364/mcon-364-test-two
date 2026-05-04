@@ -1,0 +1,27 @@
+name: Autograder
+
+on:
+  push:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  autograde:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Copy hidden autograder into test sources
+        run: |
+          mkdir -p src/test/java/edu/touro/las/mcon364/test
+          cp .github/autograder/MidtermAutograderTest.java src/test/java/edu/touro/las/mcon364/test/MidtermAutograderTest.java
+
+      - name: Run GitHub Classroom Autograder
+        uses: education/autograding@v1
