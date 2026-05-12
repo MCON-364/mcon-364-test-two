@@ -63,32 +63,29 @@ public class TaskDispatcher {
      *   the results later. Do not wait for the results here.
      */
     public List<Future<String>> dispatch(List<String> tasks) {
-        // TODO 3
-        List<Future<String>>futures = tasks.stream().map(String::toUpperCase).map(
-                upper -> {
-                    Future<String> future = pool.submit(() -> {
-                        try {
-                            lock.lock();
-                            recordResult(upper);
-                            completedCount++;
-                        }
-                        finally {
-                            lock.unlock();
-                        }
-                        return upper;
-                    });
-                    return future;
-                }
-        ).toList();
+        List<Future<String>> futures = tasks.stream()
+                .map(task -> pool.submit(() -> {  // task handed to pool as-is
+                    String upper = task.toUpperCase();  // (a) upper-case inside the worker
+                    recordResult(upper);                // (b) record — locking lives there now
+                    return upper;                       // (c) return result
+                }))
+                .toList();
         return futures;
     }
 
-    public void recordResult(String result) {
-        results.add(result);
+    public void recordResult(String result) {       // TODO 4 — owns the lock
+        lock.lock();
+        try {
+            results.add(result);                    // both fields updated atomically
+            completedCount++;
+        } finally {
+            lock.unlock();                          // always released
+        }
     }
 
     public void shutdown() throws InterruptedException {
-        boolean result = pool.awaitTermination(10, TimeUnit.SECONDS);
+        pool.shutdown();                            // stop accepting new work first
+        pool.awaitTermination(10, TimeUnit.SECONDS);
     }
 
     public List<String> getResults() {

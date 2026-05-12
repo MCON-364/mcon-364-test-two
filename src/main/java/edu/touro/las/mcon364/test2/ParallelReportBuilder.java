@@ -1,5 +1,4 @@
 package edu.touro.las.mcon364.test2;
-import java.util.ArrayList;
 import java.util.IntSummaryStatistics;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -52,7 +51,7 @@ public class ParallelReportBuilder {
 
 
     // TODO 1: declare and initialize thread-safe progress tracking state
-    private AtomicInteger numberOfBatchesProcessed = new AtomicInteger(0);
+    private final AtomicInteger numberOfBatchesProcessed = new AtomicInteger(0);
     /*
      * TODO 2 — generateReport(List<List<Transaction>> batches, int workers)
      *
@@ -80,7 +79,7 @@ public class ParallelReportBuilder {
             throws InterruptedException, ExecutionException, IllegalArgumentException {
 
         // TODO 2A: validate inputs where appropriate
-        if(batches == null || batches.size() == 0){
+        if(batches == null || batches.isEmpty()){
             throw new IllegalArgumentException("No transactions were provided");
         }
         if ( workers <= 0){
@@ -88,24 +87,23 @@ public class ParallelReportBuilder {
         }
         // TODO 2B: create the concurrency structure needed for the pattern you chose
         ExecutorService pool = Executors.newFixedThreadPool(workers);
-        List<Future<BatchStats>> futures = new ArrayList<>();
 
         // TODO 2C: submit or assign one unit of work per batch
         // Each unit of work should:
         // - compute BatchStats for that batch
         // - safely record that one more batch has been processed
-        futures = batches.stream().map( batch -> {
-            Future<BatchStats> future = pool.submit(() -> {
-                numberOfBatchesProcessed.incrementAndGet();
-                IntSummaryStatistics stats = batch.stream().mapToInt(t -> t.amount()).summaryStatistics();
+        List<Future<BatchStats>> futures = batches.stream().map(batch ->
+            pool.submit(() -> {
+                IntSummaryStatistics stats = batch.stream()
+                        .mapToInt(Transaction::amount)
+                        .summaryStatistics();
+                numberOfBatchesProcessed.incrementAndGet(); // count only on success
                 return new BatchStats(stats.getSum(),
                         stats.getCount(),
                         stats.getMax(),
-                        stats.getMin()
-                );
-            });
-            return future;
-        }).toList();
+                        stats.getMin());
+            })
+        ).toList();
 
         long totalAmount = 0;
         long totalCount = 0;

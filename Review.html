@@ -1,0 +1,2191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Concurrency Debugging Workshop</title>
+
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --panel: #ffffff;
+            --ink: #18212f;
+            --muted: #5b677a;
+            --brand: #7a0019;
+            --brand-2: #9f1239;
+            --blue: #2563eb;
+            --green: #15803d;
+            --amber: #b45309;
+            --purple: #7c3aed;
+            --line: #dbe3ee;
+            --soft: #eef4ff;
+            --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+            --radius: 18px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, Arial, Helvetica, sans-serif;
+            color: var(--ink);
+            background:
+                    radial-gradient(circle at top right, rgba(37,99,235,0.08), transparent 26%),
+                    radial-gradient(circle at top left, rgba(124,58,237,0.08), transparent 22%),
+                    linear-gradient(180deg, #fbfdff 0%, var(--bg) 100%);
+            line-height: 1.65;
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.86);
+            border-bottom: 1px solid rgba(219,227,238,0.8);
+        }
+
+        .topbar-inner,
+        .container {
+            width: min(1160px, calc(100% - 32px));
+            margin: 0 auto;
+        }
+
+        .topbar-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 0;
+        }
+
+        .brandmark {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 800;
+            color: var(--brand);
+        }
+
+        .brandmark svg {
+            width: 36px;
+            height: 36px;
+            flex: 0 0 auto;
+        }
+
+        nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        nav a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.95rem;
+            padding: 7px 10px;
+            border-radius: 999px;
+            transition: 0.2s ease;
+        }
+
+        nav a:hover {
+            background: #f2f6fc;
+            color: var(--brand);
+        }
+
+        .hero {
+            padding: 34px 0 24px;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.9fr;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .hero-card,
+        .panel,
+        .info-card,
+        .timeline-card,
+        .quiz-card,
+        .demo-card,
+        details {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+
+        .hero-card {
+            padding: 28px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: var(--brand-2);
+            background: #fff1f5;
+            border: 1px solid #ffd4df;
+            padding: 7px 12px;
+            border-radius: 999px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            line-height: 1.18;
+        }
+
+        h1 {
+            font-size: clamp(2rem, 4vw, 3.2rem);
+            margin: 14px 0 14px;
+            color: var(--brand);
+        }
+
+        h2 {
+            font-size: clamp(1.5rem, 2.4vw, 2rem);
+            margin: 0 0 16px;
+            color: var(--brand);
+        }
+
+        h3 {
+            font-size: 1.15rem;
+            margin: 0 0 8px;
+            color: #11213d;
+        }
+
+        p {
+            margin: 0 0 14px;
+        }
+
+        .lead {
+            font-size: 1.08rem;
+            color: #334155;
+            max-width: 68ch;
+        }
+
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .pill-btn,
+        button.inline-btn {
+            appearance: none;
+            border: none;
+            cursor: pointer;
+            border-radius: 999px;
+            font-weight: 700;
+            padding: 11px 16px;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
+        }
+
+        .pill-btn {
+            background: linear-gradient(135deg, var(--brand), var(--brand-2));
+            color: #fff;
+            text-decoration: none;
+            box-shadow: 0 8px 20px rgba(159, 18, 57, 0.22);
+        }
+
+        .pill-btn.secondary {
+            background: #eff6ff;
+            color: var(--blue);
+            box-shadow: none;
+            border: 1px solid #cfe0ff;
+        }
+
+        .pill-btn:hover,
+        button.inline-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .hero-visual {
+            padding: 22px;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .metric {
+            background: #f8fbff;
+            border: 1px solid #d9e8ff;
+            border-radius: 16px;
+            padding: 16px;
+        }
+
+        .metric strong {
+            display: block;
+            font-size: 1.45rem;
+            color: var(--blue);
+        }
+
+        .metric span {
+            font-size: 0.92rem;
+            color: var(--muted);
+        }
+
+        section {
+            margin: 22px 0 28px;
+        }
+
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .section-head p {
+            color: var(--muted);
+            max-width: 70ch;
+        }
+
+        .grid-2,
+        .grid-3,
+        .comparison-grid,
+        .lesson-end-grid,
+        .mini-grid {
+            display: grid;
+            gap: 18px;
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .comparison-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .lesson-end-grid {
+            grid-template-columns: 1.1fr 0.9fr;
+        }
+
+        .mini-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .info-card,
+        .timeline-card,
+        .quiz-card,
+        .demo-card,
+        .panel {
+            padding: 22px;
+        }
+
+        .info-card .icon,
+        .timeline-card .icon,
+        .quiz-card .icon,
+        .demo-card .icon,
+        .panel .icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            display: inline-grid;
+            place-items: center;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #eff6ff, #f5f3ff);
+            border: 1px solid #dae6ff;
+        }
+
+        .tag-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .tag {
+            font-size: 0.85rem;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #f8fafc;
+            border: 1px solid var(--line);
+            color: var(--muted);
+        }
+
+        .story-strip {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .story-box {
+            padding: 16px;
+            border-radius: 16px;
+            background: #ffffff;
+            border: 1px solid var(--line);
+            min-height: 150px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .story-box::after {
+            content: "";
+            position: absolute;
+            inset: auto -12px -12px auto;
+            width: 84px;
+            height: 84px;
+            opacity: 0.14;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--blue), transparent 52%);
+        }
+
+        .story-box strong {
+            display: block;
+            color: var(--brand);
+            margin-bottom: 8px;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 28px;
+            margin: 0;
+        }
+
+        .timeline::before {
+            content: "";
+            position: absolute;
+            left: 10px;
+            top: 4px;
+            bottom: 4px;
+            width: 2px;
+            background: linear-gradient(180deg, #bfdbfe, #c4b5fd);
+        }
+
+        .timeline li {
+            list-style: none;
+            position: relative;
+            margin: 0 0 18px;
+            padding-left: 12px;
+        }
+
+        .timeline li::before {
+            content: "";
+            position: absolute;
+            left: -22px;
+            top: 7px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fff;
+            border: 3px solid var(--blue);
+            box-shadow: 0 0 0 4px #eff6ff;
+        }
+
+        .callout {
+            border-radius: 18px;
+            padding: 18px 20px;
+            border: 1px solid;
+            margin: 14px 0 0;
+        }
+
+        .callout.note {
+            background: #f0f7ff;
+            border-color: #cfe0ff;
+        }
+
+        .callout.warn {
+            background: #fff7ed;
+            border-color: #fed7aa;
+        }
+
+        .callout.good {
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .callout.danger {
+            background: #fff1f2;
+            border-color: #fecdd3;
+        }
+
+        pre {
+            margin: 0;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 18px;
+            border-radius: 16px;
+            overflow-x: auto;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+            font-size: 0.95rem;
+        }
+
+        code {
+            font-family: "SFMono-Regular", Consolas, Monaco, monospace;
+        }
+
+        .code-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .code-tab {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--muted);
+            padding: 8px 12px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .code-tab.active {
+            background: #eef4ff;
+            color: var(--blue);
+            border-color: #bfdbfe;
+        }
+
+        .code-panel {
+            display: none;
+        }
+
+        .code-panel.active {
+            display: block;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            overflow: hidden;
+            border-radius: 16px;
+            background: #fff;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--line);
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 14px;
+            border-bottom: 1px solid #e9eef5;
+            vertical-align: top;
+        }
+
+        th {
+            background: #f8fafc;
+            color: #243247;
+            font-size: 0.95rem;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        details {
+            padding: 16px 18px;
+            margin-bottom: 12px;
+        }
+
+        summary {
+            cursor: pointer;
+            font-weight: 800;
+            color: #11213d;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        summary::-webkit-details-marker {
+            display: none;
+        }
+
+        summary::after {
+            content: "+";
+            font-size: 1.4rem;
+            color: var(--blue);
+        }
+
+        details[open] summary::after {
+            content: "–";
+        }
+
+        .flow-graphic {
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 18px;
+            background: linear-gradient(180deg, #fff, #f8fbff);
+        }
+
+        .flow-row {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+            align-items: center;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .flow-node {
+            padding: 14px 10px;
+            border-radius: 16px;
+            border: 1px solid var(--line);
+            background: #fff;
+            min-height: 88px;
+            display: grid;
+            place-items: center;
+            font-weight: 700;
+        }
+
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: var(--blue);
+            font-weight: 900;
+        }
+
+        .stack-steps {
+            display: grid;
+            gap: 12px;
+        }
+
+        .step {
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 14px;
+            background: #fbfdff;
+        }
+
+        .step strong {
+            color: var(--brand);
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .mcq {
+            display: grid;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .mcq label {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid var(--line);
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .mcq-result {
+            margin-top: 14px;
+            padding: 14px;
+            border-radius: 14px;
+            display: none;
+            font-weight: 700;
+        }
+
+        .mcq-result.show {
+            display: block;
+        }
+
+        .mcq-result.ok {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .mcq-result.nope {
+            background: #fff7ed;
+            color: #9a3412;
+            border: 1px solid #fed7aa;
+        }
+
+        .checklist {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .checklist li {
+            margin-bottom: 8px;
+        }
+
+        .footer-note {
+            color: var(--muted);
+            font-size: 0.95rem;
+            text-align: center;
+            margin: 34px 0 28px;
+        }
+
+        .teacher-note {
+            border-left: 5px solid var(--purple);
+            background: #f5f3ff;
+            padding: 16px 18px;
+            border-radius: 16px;
+            margin-top: 14px;
+        }
+
+        .student-prompt {
+            border-left: 5px solid var(--blue);
+            background: #eff6ff;
+            padding: 16px 18px;
+            border-radius: 16px;
+            margin-top: 14px;
+        }
+
+        .bad-good {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .bad-box {
+            border: 1px solid #fecdd3;
+            background: #fff1f2;
+            border-radius: 18px;
+            padding: 18px;
+        }
+
+        .good-box {
+            border: 1px solid #bbf7d0;
+            background: #f0fdf4;
+            border-radius: 18px;
+            padding: 18px;
+        }
+
+        @media (max-width: 960px) {
+            .hero-grid,
+            .grid-2,
+            .grid-3,
+            .comparison-grid,
+            .lesson-end-grid,
+            .story-strip,
+            .flow-row,
+            .mini-grid,
+            .metrics,
+            .bad-good {
+                grid-template-columns: 1fr;
+            }
+
+            .topbar-inner {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div class="topbar">
+    <div class="topbar-inner">
+        <div class="brandmark">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+                <defs>
+                    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#7a0019"/>
+                        <stop offset="100%" stop-color="#2563eb"/>
+                    </linearGradient>
+                </defs>
+                <rect x="6" y="6" width="52" height="52" rx="16" fill="url(#g1)"/>
+                <path d="M17 22h30v6H17zm0 12h20v6H17zm27 0h6v6h-6z" fill="#fff" opacity="0.96"/>
+                <circle cx="23" cy="46" r="5" fill="#fff" opacity="0.95"/>
+                <circle cx="42" cy="46" r="5" fill="#fff" opacity="0.95"/>
+            </svg>
+            <div>
+                <div>Concurrency Debugging Workshop</div>
+                <small style="color: var(--muted); font-weight: 600;">Future pattern • compute() • atomic operations</small>
+            </div>
+        </div>
+
+        <nav>
+            <a href="#agenda">Agenda</a>
+            <a href="#diagnosis">What went wrong?</a>
+            <a href="#review">Code review</a>
+            <a href="#future">Future pattern</a>
+            <a href="#compute">compute()</a>
+            <a href="#practice">Practice</a>
+            <a href="#checklist">Checklist</a>
+        </nav>
+    </div>
+</div>
+
+<main class="container">
+
+    <section class="hero">
+        <div class="hero-grid">
+            <div class="hero-card">
+                <div class="eyebrow">From correct-looking code to correct concurrent code</div>
+
+                <h1>Concurrency Debugging Workshop</h1>
+
+                <p class="lead">
+                    Today we are going to reverse engineer why concurrent code can look correct and still fail.
+                    We will focus on two patterns that caused the most confusion: the Future/Callable workflow
+                    and atomic updates using <code>compute()</code>.
+                </p>
+
+                <div class="hero-actions">
+                    <a class="pill-btn" href="#agenda">Start the workshop</a>
+                    <a class="pill-btn secondary" href="#checklist">Jump to checklist</a>
+                </div>
+            </div>
+
+            <div class="hero-visual hero-card">
+                <svg viewBox="0 0 560 360" width="100%" role="img" aria-label="Concurrent code debugging flow">
+                    <defs>
+                        <linearGradient id="heroBg" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#eff6ff"/>
+                            <stop offset="100%" stop-color="#fdf2f8"/>
+                        </linearGradient>
+
+                        <linearGradient id="arrowHero" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="#2563eb"/>
+                            <stop offset="100%" stop-color="#7c3aed"/>
+                        </linearGradient>
+                    </defs>
+
+                    <rect x="8" y="8" width="544" height="344" rx="28" fill="url(#heroBg)" stroke="#dbe3ee"/>
+
+                    <rect x="38" y="50" width="190" height="76" rx="20" fill="#fff" stroke="#cfe0ff"/>
+                    <text x="133" y="82" text-anchor="middle" font-size="20" font-weight="800" fill="#2563eb">Looks Correct</text>
+                    <text x="133" y="106" text-anchor="middle" font-size="14" fill="#475569">uses the right class</text>
+
+                    <path d="M230 88 C280 88, 296 88, 346 88" stroke="url(#arrowHero)" stroke-width="10" stroke-linecap="round" fill="none"/>
+
+                    <rect x="350" y="50" width="170" height="76" rx="20" fill="#fff" stroke="#ddd6fe"/>
+                    <text x="435" y="82" text-anchor="middle" font-size="20" font-weight="800" fill="#7c3aed">Still Fails</text>
+                    <text x="435" y="106" text-anchor="middle" font-size="14" fill="#475569">wrong timing</text>
+
+                    <rect x="58" y="208" width="130" height="76" rx="20" fill="#fff" stroke="#bbf7d0"/>
+                    <text x="123" y="236" text-anchor="middle" font-size="18" font-weight="800" fill="#15803d">Atomicity</text>
+                    <text x="123" y="260" text-anchor="middle" font-size="13" fill="#475569">one safe unit</text>
+
+                    <rect x="214" y="208" width="130" height="76" rx="20" fill="#fff" stroke="#fed7aa"/>
+                    <text x="279" y="236" text-anchor="middle" font-size="18" font-weight="800" fill="#b45309">Futures</text>
+                    <text x="279" y="260" text-anchor="middle" font-size="13" fill="#475569">submit then get</text>
+
+                    <rect x="370" y="208" width="130" height="76" rx="20" fill="#fff" stroke="#fbcfe8"/>
+                    <text x="435" y="236" text-anchor="middle" font-size="18" font-weight="800" fill="#9f1239">Testing</text>
+                    <text x="435" y="260" text-anchor="middle" font-size="13" fill="#475569">verify behavior</text>
+
+                    <path d="M435 126 C435 166, 185 168, 123 208" stroke="url(#arrowHero)" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.75"/>
+                    <path d="M435 126 C435 166, 320 168, 279 208" stroke="url(#arrowHero)" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.75"/>
+                    <path d="M435 126 C435 166, 435 180, 435 208" stroke="url(#arrowHero)" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.75"/>
+
+                    <text x="280" y="324" text-anchor="middle" font-size="18" font-weight="700" fill="#475569">
+                        Concurrency is coordination
+                    </text>
+                </svg>
+
+                <div class="metrics">
+                    <div class="metric">
+                        <strong>1</strong>
+                        <span>Read the code as a timeline.</span>
+                    </div>
+
+                    <div class="metric">
+                        <strong>2</strong>
+                        <span>Find where work is submitted.</span>
+                    </div>
+
+                    <div class="metric">
+                        <strong>3</strong>
+                        <span>Find where results are collected.</span>
+                    </div>
+
+                    <div class="metric">
+                        <strong>4</strong>
+                        <span>Find the atomic boundary.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="agenda">
+        <div class="section-head">
+            <div>
+                <h2>Agenda</h2>
+                <p>
+                    This session is a workshop. We will inspect broken code, predict how it behaves,
+                    then repair it using the concurrency patterns we already studied.
+                </p>
+            </div>
+        </div>
+
+        <div class="story-strip">
+            <div class="story-box">
+                <strong>1. Interactive Code Review</strong>
+                We inspect a broken <code>dispatch()</code> method and ask: where is the work happening?
+            </div>
+
+            <div class="story-box">
+                <strong>2. Future / Callable Pattern</strong>
+                We submit all tasks first, then collect results later.
+            </div>
+
+            <div class="story-box">
+                <strong>3. compute() Deep Dive</strong>
+                We replace unsafe check-then-act logic with atomic map updates.
+            </div>
+
+            <div class="story-box">
+                <strong>4. Q&A </strong>
+                We clarify the assignment.
+            </div>
+        </div>
+    </section>
+
+    <section id="diagnosis">
+        <div class="section-head">
+            <div>
+                <h2>What actually went wrong?</h2>
+                <p>
+                    The most important thing to understand: many submissions used the correct API names,
+                    but the code did not yet follow the correct execution pattern.
+                </p>
+            </div>
+        </div>
+
+        <div class="grid-3">
+            <div class="info-card">
+                <div class="icon">🧩</div>
+                <h3>Correct tool, wrong operation boundary</h3>
+                <p>
+                    A <code>ConcurrentHashMap</code> makes individual operations safe, but it does not automatically
+                    make a sequence like get-check-put atomic.
+                </p>
+
+                <pre><code>stock.get(item);
+check quantity;
+stock.put(item, newValue);</code></pre>
+            </div>
+
+            <div class="info-card">
+                <div class="icon">⏳</div>
+                <h3>Future was treated like a result</h3>
+                <p>
+                    A <code>Future</code> is not the result itself. It is a handle to work that may complete later.
+                </p>
+
+                <pre><code>Future&lt;String&gt; future =
+    pool.submit(callable);
+
+String result = future.get();</code></pre>
+            </div>
+
+            <div class="info-card">
+                <div class="icon">🧪</div>
+                <h3>Tests were not used early enough</h3>
+                <p>
+                    Concurrency code is difficult to reason about by inspection alone. Compilation and small tests
+                    catch many issues before submission.
+                </p>
+
+                <ul class="checklist">
+                    <li>Run after each TODO</li>
+                    <li>Test simple cases first</li>
+                    <li>Then test concurrent behavior</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="callout note">
+            <strong>Workshop rule:</strong>
+            When reviewing concurrent code, do not start by asking, “Which class did I use?”
+            Start by asking, “What can happen at the same time?”
+        </div>
+    </section>
+
+    <section id="review">
+        <div class="section-head">
+            <div>
+                <h2>Part 1: Interactive Code Review</h2>
+                <p>
+                    We will review an anonymized versions of a common <code>dispatch()</code> mistake.
+                    The goal is not to shame the mistake. The goal is to learn how to read concurrent code.
+                </p>
+            </div>
+        </div>
+        <p>The assignment code </p>
+        <div>
+
+    <pre><code>/*
+ *   Hand each task off to the pool. The work each thread does is:
+ *     (a) upper-case the string
+ *     (b) record the result by calling recordResult()
+ *     (c) return the result
+ *   Give back a handle to each piece of work so the caller can retrieve
+ *   the results later. Do not wait for the results here.
+ */
+public List&lt;Future&lt;String&gt;&gt; dispatch(List&lt;String&gt; tasks) {
+    // TODO 3
+    return null; //placeholder
+}</code></pre>
+
+        </div>
+        <p></p>
+        <div class="panel">
+            <h3>The intended behavior</h3>
+
+            <div class="flow-graphic">
+                <div class="flow-row">
+                    <div class="flow-node">String task</div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node">submit to pool</div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node">worker uppercases</div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node">Future result</div>
+                </div>
+            </div>
+
+            <div class="callout good">
+                <strong>The key pattern:</strong>
+                each task should be handed to the pool, the worker should uppercase the string,
+                the worker should record the result, and the caller should receive a <code>Future</code>.
+            </div>
+        </div>
+
+        <details open>
+            <summary>Broken Version A — uppercasing before submission</summary>
+
+            <pre><code>public List&lt;Future&lt;String&gt;&gt; dispatch(List&lt;String&gt; tasks) {
+
+    return tasks.stream()
+        .map(String::toUpperCase)
+        .map(upper -&gt; pool.submit(() -&gt; {
+            recordResult(upper);
+            return upper;
+        }))
+        .toList();
+}</code></pre>
+
+            <div class="student-prompt">
+                <strong>What you should ask:</strong>
+                <ul>
+                    <li>Where does the uppercasing happen?</li>
+                    <li>Does the worker thread do the transformation?</li>
+                    <li>What work is actually submitted to the pool?</li>
+                    <li>Does this match the method specification?</li>
+                </ul>
+            </div>
+
+            <div class="teacher-note">
+                <strong>Note:</strong>
+                This code may appear to work for small examples because the final strings are uppercase.
+                But it violates the intended concurrency design: the expensive or meaningful work should happen inside
+                the submitted task.
+            </div>
+        </details>
+
+        <details>
+            <summary>Broken Version B — get() too early</summary>
+
+            <pre><code>public List&lt;String&gt; dispatchAndCollect(List&lt;String&gt; tasks)
+        throws Exception {
+
+    List&lt;String&gt; results = new ArrayList&lt;&gt;();
+
+    for (String task : tasks) {
+        Future&lt;String&gt; future = pool.submit(() -&gt; task.toUpperCase());
+        results.add(future.get());
+    }
+
+    return results;
+}</code></pre>
+
+            <div class="student-prompt">
+                <strong>What you should ask:</strong>
+                <ul>
+                    <li>What happens immediately after each submit?</li>
+                    <li>Does the loop submit all tasks first?</li>
+                    <li>How much concurrency do we actually get?</li>
+                </ul>
+            </div>
+
+            <div class="callout warn">
+                <strong>Problem:</strong>
+                calling <code>get()</code> immediately blocks the loop. The next task is not submitted until
+                the current one finishes.
+            </div>
+        </details>
+
+        <details>
+            <summary>Broken Version C — shared state updated without the intended method</summary>
+
+            <pre><code>public List&lt;Future&lt;String&gt;&gt; dispatch(List&lt;String&gt; tasks) {
+
+    return tasks.stream()
+        .map(task -&gt; pool.submit(() -&gt; {
+            String result = task.toUpperCase();
+
+            results.add(result);
+            completedCount++;
+
+            return result;
+        }))
+        .toList();
+}</code></pre>
+
+            <div class="student-prompt">
+                <strong>What you should ask:</strong>
+                <ul>
+                    <li>What shared state is being updated?</li>
+                    <li>Can another thread interrupt between <code>results.add()</code> and <code>completedCount++</code>?</li>
+                    <li>Why did the problem require <code>recordResult()</code>?</li>
+                </ul>
+            </div>
+
+            <div class="callout warn">
+                <strong>Problem:</strong>
+                the list and counter must stay in sync. If two updates belong together,
+                they must be protected together.
+            </div>
+        </details>
+
+        <details>
+            <summary>Corrected dispatch() pattern</summary>
+
+            <pre><code>public List&lt;Future&lt;String&gt;&gt; dispatch(List&lt;String&gt; tasks) {
+
+    return tasks.stream()
+        .map(task -&gt;
+            pool.submit(() -&gt; {
+                String result = task.toUpperCase();
+                recordResult(result);
+                return result;
+            })
+        )
+        .toList();
+
+    public void recordResult(String result) {       // TODO 4 — owns the lock
+        lock.lock();
+        try {
+            results.add(result);                    // both fields updated atomically
+            completedCount++;
+        } finally {
+            lock.unlock();                          // always released
+        }
+    }
+
+}</code></pre>
+
+            <div class="callout good">
+                <strong>Why this works:</strong>
+                <ul>
+                    <li>The task is submitted to the pool.</li>
+                    <li>The worker thread performs the uppercase operation.</li>
+                    <li>The worker records the result.</li>
+                    <li>The caller receives a <code>Future&lt;String&gt;</code>.</li>
+                    <li>The method does not wait here.</li>
+                </ul>
+            </div>
+        </details>
+    </section>
+
+    <section id="future">
+        <div class="section-head">
+            <div>
+                <h2>Part 2: Live Coding — Future / Callable Pattern</h2>
+                <p>
+                    This is the pattern we want to burn into memory:
+                    submit all available work first, then collect results.
+                </p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>The mental model</h3>
+
+            <div class="flow-graphic">
+                <div class="flow-row">
+                    <div class="flow-node">Callable<br><span style="font-weight:500;color:var(--muted);">work that returns</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node">submit()<br><span style="font-weight:500;color:var(--muted);">starts later/asap</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node">Future<br><span style="font-weight:500;color:var(--muted);">handle to result</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node">get()<br><span style="font-weight:500;color:var(--muted);">waits if needed</span></div>
+                </div>
+            </div>
+
+            <div class="callout note">
+                <strong>Say this out loud:</strong>
+                <code>submit()</code> returns quickly. <code>get()</code> blocks. This is the pattern.
+            </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:18px;">
+            <div class="panel">
+                <h3>Step 1 — Sequential version</h3>
+
+                <pre><code>List&lt;Integer&gt; squares = numbers.stream()
+    .map(n -&gt; n * n)
+    .toList();</code></pre>
+
+                <p style="margin-top:14px;">
+                    This is simple and correct, but all work happens on the current thread.
+                </p>
+            </div>
+
+            <div class="panel">
+                <h3>Step 2 — Submit work to a pool</h3>
+
+                <pre><code>ExecutorService pool =
+    Executors.newFixedThreadPool(4);
+
+List&lt;Future&lt;Integer&gt;&gt; futures =
+    numbers.stream()
+        .map(n -&gt; pool.submit(() -&gt; n * n))
+        .toList();</code></pre>
+
+                <p style="margin-top:14px;">
+                    Now every number becomes a task. The result is not an integer yet.
+                    The result is a <code>Future&lt;Integer&gt;</code>.
+                </p>
+            </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:18px;">
+            <div class="panel">
+                <h3>Step 3 — Collect results later</h3>
+
+                <pre><code>List&lt;Integer&gt; results = new ArrayList&lt;&gt;();
+
+for (Future&lt;Integer&gt; future : futures) {
+    results.add(future.get());
+}</code></pre>
+
+                <p style="margin-top:14px;">
+                    This is where we wait for completed work and turn futures into actual results.
+                </p>
+            </div>
+
+            <div class="panel">
+                <h3>Step 4 — Shut down the pool</h3>
+
+                <pre><code>pool.shutdown();
+
+if (!pool.awaitTermination(10, TimeUnit.SECONDS)) {
+    pool.shutdownNow();
+}</code></pre>
+
+                <p style="margin-top:14px;">
+                    Executor services are resources. When we are done submitting work, we must shut them down.
+                </p>
+            </div>
+        </div>
+
+        <div class="bad-good" style="margin-top:18px;">
+            <div class="bad-box">
+                <h3>Wrong pattern</h3>
+
+                <pre><code>for (Integer n : numbers) {
+    Future&lt;Integer&gt; f =
+        pool.submit(() -&gt; n * n);
+
+    results.add(f.get());
+}</code></pre>
+
+                <p>
+                    This submits one task, waits for it, then submits the next task.
+                    It destroys most of the concurrency.
+                </p>
+            </div>
+
+            <div class="good-box">
+                <h3>Correct pattern</h3>
+
+                <pre><code>List&lt;Future&lt;Integer&gt;&gt; futures =
+    numbers.stream()
+        .map(n -&gt; pool.submit(() -&gt; n * n))
+        .toList();
+
+for (Future&lt;Integer&gt; f : futures) {
+    results.add(f.get());
+}</code></pre>
+
+                <p>
+                    This submits all tasks first. Then it waits for results.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section id="future-demo">
+        <div class="section-head">
+            <div>
+                <h2>Demo Code: FuturePatternDemo.java</h2>
+                <p>
+                    Use this small example before returning to the assignment problem.
+                    The goal is to isolate the pattern from the larger codebase.
+                </p>
+            </div>
+        </div>
+
+        <div class="panel">
+
+<pre><code>package edu.touro.mcon364.concurrency.remediation.demo;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
+
+public class FuturePatternDemo {
+
+    public static void main(String[] args)
+            throws ExecutionException, InterruptedException {
+
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+
+        List&lt;Integer&gt; numbers = List.of(1, 2, 3, 4, 5, 6);
+
+        List&lt;Future&lt;Integer&gt;&gt; futures = numbers.stream()
+                .map(n -&gt; pool.submit(() -&gt; {
+                    Thread.sleep(1000);
+                    return n * n;
+                }))
+                .toList();
+
+        System.out.println("All tasks submitted.");
+
+        List&lt;Integer&gt; results = new ArrayList&lt;&gt;();
+
+        for (Future&lt;Integer&gt; future : futures) {
+            results.add(future.get());
+        }
+
+        System.out.println(results);
+
+        pool.shutdown();
+    }
+}</code></pre>
+
+        </div>
+    </section>
+
+    <section id="compute">
+        <div class="section-head">
+            <div>
+                <h2>Part 3: compute() and merge() Deep Dive</h2>
+                <p>
+                    The most important idea: <code>ConcurrentHashMap</code> makes individual map operations safe,
+                    but not a multi-step check-then-update sequence.
+                </p>
+            </div>
+        </div>
+        <div class="panel" style="margin-top:18px;">
+            <h3>The problem</h3>
+            <pre><code>
+            public boolean removeStock(String item, int qty) {
+            // TODO: validate qty > 0
+            if (qty <= 0){
+            throw new IllegalArgumentException("Number of units to remove should be > 0") ;
+            }
+            Integer currentValue = stock.get(item);
+            Integer newValue = stock.compute(item, (key, value) -> {
+            return value >= qty? value -= qty: value;
+            });
+            return currentValue == newValue? false: true;
+
+            // TODO: atomically check-and-decrement.
+            //       If current stock >= qty, subtract qty.
+            //       Otherwise, leave stock unchanged.
+            //       Return true if stock was depleted, false if unchanged
+            //       Hint: your chosen Map has a compute() method that lets you
+            //             read and write in one atomic step.
+
+            }
+            </code></pre>
+        </div>
+        <div class="panel" style="margin-top:18px;">
+            <h3>Solution </h3>
+            <pre><code>public boolean removeStock(String item, int qty) {
+    // validate qty &gt; 0
+    if (qty &lt;= 0) {
+        throw new IllegalArgumentException("Number of units to remove should be &gt; 0");
+    }
+    Integer currentValue = stock.get(item);
+    Integer newValue = stock.compute(item, (key, value) -&gt; {
+        return value &gt;= qty ? value - qty : value;
+    });
+    return !currentValue.equals(newValue);
+}</code></pre>
+        </div>
+
+        <div class="grid-2">
+            <div class="panel">
+                <h3>Unsafe check-then-act</h3>
+
+                <pre><code>Integer current = stock.get(item);
+
+if (current == null || current &lt; qty) {
+    return false;
+}
+
+stock.put(item, current - qty);
+return true;</code></pre>
+
+                <div class="callout warn">
+                    <strong>Problem:</strong>
+                    another thread can change the map between <code>get()</code> and <code>put()</code>.
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Atomic compute()</h3>
+
+                <pre><code>stock.compute(item, (key, current) -&gt; {
+
+    if (current == null || current &lt; qty) {
+        return current;
+    }
+
+    return current - qty;
+});</code></pre>
+
+                <div class="callout good">
+                    <strong>Why this works:</strong>
+                    the read, decision, and update happen as one atomic map operation for that key.
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-top:18px;">
+            <h3>The signature</h3>
+
+            <pre><code>compute(K key, BiFunction&lt;K, V, V&gt; remappingFunction)</code></pre>
+
+            <table style="margin-top:18px;">
+                <thead>
+                <tr>
+                    <th>Part</th>
+                    <th>Meaning</th>
+                </tr>
+                </thead>
+
+                <tbody>
+                <tr>
+                    <td><code>K key</code></td>
+                    <td>The key whose value we want to update atomically.</td>
+                </tr>
+
+                <tr>
+                    <td><code>BiFunction&lt;K, V, V&gt;</code></td>
+                    <td>A function that receives the key and current value, then returns the new value.</td>
+                </tr>
+
+                <tr>
+                    <td>Return a new value</td>
+                    <td>The map entry is replaced with that value.</td>
+                </tr>
+
+                <tr>
+                    <td>Return <code>null</code></td>
+                    <td>The map entry is removed.</td>
+                </tr>
+
+                <tr>
+                    <td>Return <code>true</code> or <code>false</code></td>
+                    <td>Wrong idea. The lambda returns the new map value, not whether the operation succeeded.</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <details open>
+            <summary>Example 1 — Increment if exists</summary>
+
+            <pre><code>stock.compute(item, (key, current) -&gt; {
+
+    if (current == null) {
+        return null;
+    }
+
+    return current + amount;
+});</code></pre>
+
+            <div class="callout note">
+                This only changes existing items. If the item is missing, it remains missing.
+            </div>
+        </details>
+
+        <details>
+            <summary>Example 2 — Remove if condition is met</summary>
+
+            <pre><code>stock.compute(item, (key, current) -&gt; {
+
+    if (current == null) {
+        return null;
+    }
+
+    if (current == 0) {
+        return null;
+    }
+
+    return current;
+});</code></pre>
+
+            <div class="callout note">
+                Returning <code>null</code> from the lambda removes the map entry.
+            </div>
+        </details>
+
+        <details>
+            <summary>Example 3 — Conditional update with success tracking</summary>
+
+            <pre><code>AtomicBoolean removed = new AtomicBoolean(false);
+
+stock.compute(item, (key, current) -&gt; {
+
+    if (current == null || current &lt; qty) {
+        return current;
+    }
+
+    removed.set(true);
+    return current - qty;
+});
+
+return removed.get();</code></pre>
+
+            <div class="callout good">
+                The map update is atomic, and the boolean records whether the update happened.
+            </div>
+        </details>
+    </section>
+
+    <section id="race-timeline">
+        <div class="section-head">
+            <div>
+                <h2>Why check-then-act fails: timeline</h2>
+                <p>
+                    This is the race condition that <code>compute()</code> prevents.
+                </p>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+            <tr>
+                <th>Time</th>
+                <th>Thread A</th>
+                <th>Thread B</th>
+                <th>Stock value</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            <tr>
+                <td>1</td>
+                <td><code>get("keyboard") → 5</code></td>
+                <td></td>
+                <td>5</td>
+            </tr>
+
+            <tr>
+                <td>2</td>
+                <td></td>
+                <td><code>get("keyboard") → 5</code></td>
+                <td>5</td>
+            </tr>
+
+            <tr>
+                <td>3</td>
+                <td>checks: 5 >= 4, allowed</td>
+                <td></td>
+                <td>5</td>
+            </tr>
+
+            <tr>
+                <td>4</td>
+                <td></td>
+                <td>checks: 5 >= 4, allowed</td>
+                <td>5</td>
+            </tr>
+
+            <tr>
+                <td>5</td>
+                <td><code>put("keyboard", 1)</code></td>
+                <td></td>
+                <td>1</td>
+            </tr>
+
+            <tr>
+                <td>6</td>
+                <td></td>
+                <td><code>put("keyboard", 1)</code></td>
+                <td>1</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="callout danger">
+            <strong>Bug:</strong>
+            Both removals succeeded even though the inventory only had enough stock for one of them.
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <section id="generateReport">
+        <div class="section-head">
+            <div>
+                <h2>Part 4b: generateReport — Understanding the Data Hierarchy</h2>
+                <p>
+                    Many students panicked when they saw <code>List&lt;List&lt;Transaction&gt;&gt;</code>.
+                    This section breaks down exactly what that type means, why it exists,
+                    and how to walk through it step by step.
+                </p>
+            </div>
+        </div>
+
+        <!-- ── 1. What the type actually means ── -->
+        <div class="panel">
+            <h3>Step 1 — Read the type from the outside in</h3>
+            <table>
+                <thead>
+                <tr><th>Type</th><th>What one element represents</th></tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>Transaction</code></td>
+                    <td>A single sale / payment: an <code>id</code> and an <code>amount</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>List&lt;Transaction&gt;</code></td>
+                    <td>One <em>batch</em> — a group of transactions that arrived together (e.g., one day's data).</td>
+                </tr>
+                <tr>
+                    <td><code>List&lt;List&lt;Transaction&gt;&gt;</code></td>
+                    <td>Many batches. The outer list is just a collection of those day-sized groups.</td>
+                </tr>
+                </tbody>
+            </table>
+            <div class="callout good" style="margin-top:12px;">
+                <strong>Mental picture:</strong>
+                Think of it as a box of envelopes. Each envelope (<code>List&lt;Transaction&gt;</code>)
+                holds a stack of receipts (<code>Transaction</code>).
+                The box (<code>List&lt;List&lt;Transaction&gt;&gt;</code>) holds all the envelopes.
+                You process one envelope at a time, independently — perfect for concurrency.
+            </div>
+        </div>
+
+        <!-- ── 2. Walk-through diagram ── -->
+        <div class="panel" style="margin-top:18px;">
+            <h3>Step 2 — Concrete example</h3>
+            <pre><code>batches (List&lt;List&lt;Transaction&gt;&gt;)
+ │
+ ├── batch 0  (List&lt;Transaction&gt;) ── [ T("t1",100), T("t2",200), T("t3", 50) ]
+ ├── batch 1  (List&lt;Transaction&gt;) ── [ T("t4",300), T("t5", 75) ]
+ └── batch 2  (List&lt;Transaction&gt;) ── [ T("t6", 25) ]</code></pre>
+            <p style="margin-top:10px;">
+                Each batch is submitted to the thread pool as one independent <code>Callable</code>.
+                The pool runs them concurrently. Each callable returns one <code>BatchStats</code>.
+            </p>
+        </div>
+
+        <!-- ── 3. The full solution annotated ── -->
+        <div class="panel" style="margin-top:18px;">
+            <h3>Step 3 — Full implementation, line by line</h3>
+            <pre><code>public ReportSummary generateReport(List&lt;List&lt;Transaction&gt;&gt; batches, int workers)
+        throws InterruptedException, ExecutionException {
+
+    // ① Guard-rails
+    if (batches == null || batches.isEmpty())
+        throw new IllegalArgumentException("No transactions were provided");
+    if (workers &lt;= 0)
+        throw new IllegalArgumentException("workers must be &gt; 0");
+
+    // ② Create the pool — workers controls the parallelism level
+    ExecutorService pool = Executors.newFixedThreadPool(workers);
+    List&lt;Future&lt;BatchStats&gt;&gt; futures = new ArrayList&lt;&gt;();
+
+    // ③ Submit ONE task per batch — do NOT block here yet
+    //    batches.get(i) is a List&lt;Transaction&gt; — one envelope
+    for (List&lt;Transaction&gt; batch : batches) {
+        futures.add(pool.submit(() -&gt; {          // Callable&lt;BatchStats&gt;
+
+            // IntSummaryStatistics gives sum, count, max, min in one pass
+            IntSummaryStatistics stats =
+                batch.stream()
+                     .mapToInt(Transaction::amount)
+                     .summaryStatistics();
+
+            numberOfBatchesProcessed.incrementAndGet();  // thread-safe counter
+
+            return new BatchStats(
+                stats.getSum(),
+                stats.getCount(),
+                stats.getMax(),
+                stats.getMin()
+            );
+        }));
+    }
+    // All tasks are now QUEUED — the pool is running them concurrently.
+    // We haven't called future.get() yet, so we haven't blocked anyone.
+
+    // ④ Now collect — future.get() blocks until that one task finishes
+    long totalAmount = 0, totalCount = 0;
+    int  globalMax   = Integer.MIN_VALUE;
+    int  globalMin   = Integer.MAX_VALUE;
+
+    for (Future&lt;BatchStats&gt; future : futures) {
+        BatchStats bs = future.get();            // waits for THIS batch
+        totalAmount += bs.totalAmount();
+        totalCount  += bs.transactionCount();
+        globalMax    = Math.max(globalMax, bs.maxTransactionAmount());
+        globalMin    = Math.min(globalMin, bs.minTransactionAmount());
+    }
+
+    // ⑤ Release thread-pool resources
+    pool.shutdown();
+
+    // ⑥ Build and return the combined summary
+    return new ReportSummary(
+        totalAmount, totalCount,
+        globalMax,   globalMin,
+        numberOfBatchesProcessed.get()
+    );
+}</code></pre>
+        </div>
+
+        <!-- ── 4. Why Future<BatchStats> and not Future<List<BatchStats>> ── -->
+        <div class="grid-2" style="margin-top:18px;">
+            <div class="panel">
+                <h3>Why <code>Future&lt;BatchStats&gt;</code>, not <code>Future&lt;List&lt;BatchStats&gt;&gt;</code>?</h3>
+                <p>
+                    Each task handles <em>one</em> batch and returns <em>one</em> <code>BatchStats</code> object.
+                    The outer <code>List&lt;Future&lt;&gt;&gt;</code> in your code plays the role of
+                    "one result slot per batch" — you don't need another nested list inside the Future.
+                </p>
+                <div class="callout warn">
+                    <strong>Common mistake:</strong> submitting the entire
+                    <code>List&lt;List&lt;Transaction&gt;&gt;</code> as a single task.
+                    That would run everything sequentially inside one callable and defeat concurrency.
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Why submit before collecting?</h3>
+                <p>
+                    If you called <code>future.get()</code> right after each <code>submit()</code>,
+                    you would process batches one at a time — same as a plain loop.
+                    The trick is: <strong>submit all, then collect all</strong>.
+                </p>
+                <pre><code>// ✅ CORRECT — submit all first
+for (batch : batches)  futures.add(pool.submit(...));
+for (f : futures)      result = f.get();   // NOW block
+
+// ❌ WRONG — blocks immediately, no concurrency
+for (batch : batches) {
+    Future f = pool.submit(...);
+    result = f.get();   // blocks before next submit
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- ── 5. IntSummaryStatistics ── -->
+        <div class="panel" style="margin-top:18px;">
+            <h3>IntSummaryStatistics — do everything in one stream pass</h3>
+            <pre><code>IntSummaryStatistics stats =
+    batch.stream()
+         .mapToInt(Transaction::amount)
+         .summaryStatistics();
+
+stats.getSum();    // total amount for this batch
+stats.getCount();  // number of transactions
+stats.getMax();    // largest amount
+stats.getMin();    // smallest amount</code></pre>
+            <div class="callout good">
+                <strong>Why use this?</strong>
+                One stream pass, four values. No need for four separate reduce operations.
+            </div>
+        </div>
+
+        <!-- ── 6. Stream-inside-a-stream alternative ── -->
+        <div class="panel" style="margin-top:18px;">
+            <h3>Alternative: stream over batches instead of a for-loop</h3>
+            <p>
+                Instead of a <code>for</code> loop to submit tasks, you can use
+                <code>batches.stream().map(...)</code> to produce the list of futures,
+                and a second <code>.stream().map(Future::get)</code> to collect results.
+                The logic is identical — only the shape of the code changes.
+            </p>
+            <pre><code>// ③ Submit — stream over the outer list, one submit per batch
+List&lt;Future&lt;BatchStats&gt;&gt; futures =
+    batches.stream()
+           .map(batch -&gt; pool.submit(() -&gt; {          // inner lambda = Callable&lt;BatchStats&gt;
+
+               IntSummaryStatistics stats =
+                   batch.stream()                      // &lt;-- stream INSIDE the stream
+                        .mapToInt(Transaction::amount)
+                        .summaryStatistics();
+
+               numberOfBatchesProcessed.incrementAndGet();
+
+               return new BatchStats(
+                   stats.getSum(),
+                   stats.getCount(),
+                   stats.getMax(),
+                   stats.getMin()
+               );
+           }))
+           .toList();   // ALL tasks are now queued; nothing has blocked yet
+
+// ④ Collect — stream over futures, block on each .get()
+List&lt;BatchStats&gt; results =
+    futures.stream()
+           .map(f -&gt; {
+               try { return f.get(); }
+               catch (InterruptedException | ExecutionException e) {
+                   throw new RuntimeException(e);   // wrap checked exceptions
+               }
+           })
+           .toList();
+
+// ⑤ Combine BatchStats into a single ReportSummary
+long totalAmount = results.stream().mapToLong(BatchStats::totalAmount).sum();
+long totalCount  = results.stream().mapToLong(BatchStats::transactionCount).sum();
+int  globalMax   = results.stream().mapToInt(BatchStats::maxTransactionAmount).max().orElse(Integer.MIN_VALUE);
+int  globalMin   = results.stream().mapToInt(BatchStats::minTransactionAmount).min().orElse(Integer.MAX_VALUE);
+
+pool.shutdown();
+
+return new ReportSummary(totalAmount, totalCount, globalMax, globalMin,
+                         numberOfBatchesProcessed.get());</code></pre>
+
+            <div class="callout good" style="margin-top:12px;">
+                <strong>Key insight — two nested levels of streaming:</strong>
+                <ul style="margin:6px 0 0 18px; line-height:1.8;">
+                    <li>
+                        The <strong>outer</strong> <code>.stream().map(batch -&gt; pool.submit(...))</code>
+                        iterates over the <em>envelopes</em> (batches) and hands each one to the pool.
+                    </li>
+                    <li>
+                        The <strong>inner</strong> <code>batch.stream().mapToInt(...)</code>
+                        runs <em>inside the Callable</em>, on a worker thread, summing the receipts
+                        inside one envelope.
+                    </li>
+                    <li>
+                        <code>.toList()</code> on the outer stream materializes the list
+                        <em>before</em> any <code>.get()</code> is called — this is what guarantees
+                        all tasks are submitted before we start waiting.
+                    </li>
+                </ul>
+            </div>
+
+            <div class="callout warn" style="margin-top:12px;">
+                <strong>Why the try/catch inside the lambda?</strong>
+                <code>Future::get</code> throws checked exceptions
+                (<code>InterruptedException</code>, <code>ExecutionException</code>).
+                Stream lambdas cannot propagate checked exceptions, so you must either
+                wrap them in a <code>RuntimeException</code> or extract a helper method.
+            </div>
+        </div>
+
+        <!-- ── 7. Side-by-side comparison ── -->
+        <div class="grid-2" style="margin-top:18px;">
+            <div class="panel">
+                <h3>for-loop style</h3>
+                <pre><code>for (List&lt;Transaction&gt; batch : batches)
+    futures.add(pool.submit(...));
+
+for (Future&lt;BatchStats&gt; f : futures)
+    combine(f.get());</code></pre>
+                <p>Easier to read for beginners; checked exceptions don't need wrapping.</p>
+            </div>
+            <div class="panel">
+                <h3>stream style</h3>
+                <pre><code>List&lt;Future&lt;BatchStats&gt;&gt; futures =
+    batches.stream()
+           .map(batch -&gt; pool.submit(...))
+           .toList();
+
+futures.stream()
+       .map(f -&gt; { try { return f.get(); } ... })
+       .toList();</code></pre>
+                <p>More functional; pairs naturally with further stream operations on results.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="practice">
+        <div class="section-head">
+            <div>
+                <h2>Part 5: Practice Exercises</h2>
+                <p>
+                    These are intentionally small. The goal is to practice one mental model at a time.
+                </p>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="panel">
+                <h3>Exercise A — Future workflow</h3>
+
+                <pre><code>public List&lt;Future&lt;Integer&gt;&gt; dispatchNumbers(
+        List&lt;Integer&gt; numbers) {
+
+    // TODO:
+    // 1. Submit one task per number.
+    // 2. Each task squares the number.
+    // 3. Return List&lt;Future&lt;Integer&gt;&gt;.
+    // 4. Do NOT call get() here.
+
+    return null;
+}</code></pre>
+
+                <div class="student-prompt">
+                    <strong>Question:</strong>
+                    Where should <code>get()</code> happen?
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Exercise B — compute()</h3>
+
+                <pre><code>public boolean removeStock(String item, int qty) {
+
+    // TODO:
+    // 1. Use compute().
+    // 2. Do not allow stock to go negative.
+    // 3. Return true only if removal succeeded.
+
+    return false;
+}</code></pre>
+
+                <div class="student-prompt">
+                    <strong>Question:</strong>
+                    What should the lambda return when removal fails?
+                </div>
+            </div>
+        </div>
+
+        <details style="margin-top:18px;">
+            <summary>Exercise A solution sketch</summary>
+
+            <pre><code>public List&lt;Future&lt;Integer&gt;&gt; dispatchNumbers(
+        List&lt;Integer&gt; numbers) {
+
+    return numbers.stream()
+        .map(n -&gt; pool.submit(() -&gt; n * n))
+        .toList();
+}</code></pre>
+
+            <div class="callout note">
+                This method submits work and returns handles. It does not collect results.
+            </div>
+        </details>
+
+        <details>
+            <summary>Exercise B solution sketch</summary>
+
+            <pre><code>public boolean removeStock(String item, int qty) {
+
+    AtomicBoolean success = new AtomicBoolean(false);
+
+    stock.compute(item, (key, current) -&gt; {
+
+        if (current == null || current &lt; qty) {
+            return current;
+        }
+
+        success.set(true);
+        return current - qty;
+    });
+
+    return success.get();
+}</code></pre>
+
+            <div class="callout note">
+                The lambda returns the new map value. The separate boolean records whether the update succeeded.
+            </div>
+        </details>
+    </section>
+
+    <section id="assignment-connection">
+        <div class="section-head">
+            <div>
+                <h2>Connecting this back to the test problems</h2>
+                <p>
+                    Each problem was really testing one core concurrency idea.
+                </p>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+            <tr>
+                <th>Problem</th>
+                <th>Core idea</th>
+                <th>Common mistake</th>
+                <th>What to remember</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            <tr>
+                <td>InventoryManager</td>
+                <td>Atomic compound operation</td>
+                <td>Using get-check-put instead of compute()</td>
+                <td>Thread-safe map operations do not automatically make a sequence atomic.</td>
+            </tr>
+
+            <tr>
+                <td>TaskDispatcher</td>
+                <td>Future / Callable workflow</td>
+                <td>Doing work outside the submitted task or calling get() too early</td>
+                <td>Submit all work first. Collect results later.</td>
+            </tr>
+
+            <tr>
+                <td>ParallelReportBuilder</td>
+                <td>Worker pool over independent batches</td>
+                <td>Submitting work but never collecting results</td>
+                <td>A Future must eventually be read with get().</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section id="checklist">
+        <div class="section-head">
+            <div>
+                <h2>Concurrency Debugging Checklist</h2>
+                <p>
+                    Use this checklist before submitting any concurrent Java code.
+                </p>
+            </div>
+        </div>
+
+        <div class="grid-3">
+            <div class="info-card">
+                <div class="icon">🔒</div>
+                <h3>Shared state</h3>
+
+                <ul class="checklist">
+                    <li>What data can multiple threads touch?</li>
+                    <li>Is it mutable?</li>
+                    <li>Are related updates protected together?</li>
+                </ul>
+            </div>
+
+            <div class="info-card">
+                <div class="icon">🧮</div>
+                <h3>Atomicity</h3>
+
+                <ul class="checklist">
+                    <li>Am I doing get-check-put?</li>
+                    <li>Should this be <code>compute()</code>?</li>
+                    <li>Should this be <code>merge()</code>?</li>
+                </ul>
+            </div>
+
+            <div class="info-card">
+                <div class="icon">📦</div>
+                <h3>Futures</h3>
+
+                <ul class="checklist">
+                    <li>Did I save returned Futures?</li>
+                    <li>Did I collect results with <code>get()</code>?</li>
+                    <li>Did I avoid calling <code>get()</code> too early?</li>
+                </ul>
+            </div>
+
+            <div class="info-card">
+                <div class="icon">⚙️</div>
+                <h3>Executor lifecycle</h3>
+
+                <ul class="checklist">
+                    <li>Did I call <code>shutdown()</code>?</li>
+                    <li>Should I use <code>awaitTermination()</code>?</li>
+                    <li>What happens if a task throws?</li>
+                </ul>
+            </div>
+
+            <div class="info-card">
+                <div class="icon">🧪</div>
+                <h3>Testing</h3>
+
+                <ul class="checklist">
+                    <li>Does it compile?</li>
+                    <li>Does the simple case pass?</li>
+                    <li>Does the concurrent case pass?</li>
+                </ul>
+            </div>
+
+            <div class="info-card">
+                <div class="icon">📖</div>
+                <h3>Specification reading</h3>
+
+                <ul class="checklist">
+                    <li>What should this method return?</li>
+                    <li>Should this method wait?</li>
+                    <li>Who owns the result collection?</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="knowledge-check">
+        <div class="section-head">
+            <div>
+                <h2>Quick Knowledge Check</h2>
+                <p>
+                    Pick the best answer.
+                </p>
+            </div>
+        </div>
+
+        <div class="quiz-card">
+            <div class="icon">❓</div>
+
+            <h3>
+                A method submits 20 tasks to an ExecutorService. Each task returns a value.
+                Which pattern preserves the most concurrency?
+            </h3>
+
+            <div class="mcq">
+                <label>
+                    <input type="radio" name="q1" value="a">
+                    Submit one task, call get(), then submit the next task.
+                </label>
+
+                <label>
+                    <input type="radio" name="q1" value="b">
+                    Submit all tasks, store the Futures, then call get() later.
+                </label>
+
+                <label>
+                    <input type="radio" name="q1" value="c">
+                    Do all work before calling submit().
+                </label>
+
+                <label>
+                    <input type="radio" name="q1" value="d">
+                    Use a regular ArrayList and hope the threads finish in order.
+                </label>
+            </div>
+
+            <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="inline-btn pill-btn" id="checkQuizBtn">Check answer</button>
+                <button class="inline-btn pill-btn secondary" id="resetQuizBtn">Reset</button>
+            </div>
+
+            <div class="mcq-result" id="quizResult"></div>
+        </div>
+    </section>
+
+    <section id="qa">
+        <div class="section-head">
+            <div>
+                <h2>Q&A and Next Steps</h2>
+                <p>
+                    We will use the remaining time for assignment questions and resubmission planning.
+                </p>
+            </div>
+        </div>
+
+        <div class="lesson-end-grid">
+            <div class="panel">
+                <h3>Questions to bring to office hours</h3>
+
+                <ul class="checklist">
+                    <li>Which method did not behave as expected?</li>
+                    <li>Which test failed?</li>
+                    <li>Where is work submitted?</li>
+                    <li>Where are results collected?</li>
+                    <li>What shared state is being updated?</li>
+                </ul>
+            </div>
+
+            <div class="panel">
+                <h3>Resubmission support</h3>
+
+                <div class="callout good">
+                    <strong>Focus for resubmission:</strong>
+                    demonstrate the correct pattern, not just passing one example.
+                </div>
+
+                <div class="callout note">
+                    Corrected example solutions will be provided after the resubmission deadline.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="panel">
+            <h2>Final Takeaway</h2>
+
+            <div class="callout note">
+                <strong>Concurrency is coordination.</strong>
+
+                <p>
+                    It is not enough to use the right class name.
+                    We must coordinate timing, protect shared state, and separate task submission from task completion.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <div class="footer-note">
+        Concurrency Debugging Workshop • MCON 364 • Advanced Java Programming
+    </div>
+
+</main>
+
+<script>
+    const checkQuizBtn = document.getElementById('checkQuizBtn');
+    const resetQuizBtn = document.getElementById('resetQuizBtn');
+    const quizResult = document.getElementById('quizResult');
+
+    checkQuizBtn.addEventListener('click', () => {
+        const selected = document.querySelector('input[name="q1"]:checked');
+
+        if (!selected) {
+            quizResult.className = 'mcq-result show nope';
+            quizResult.textContent = 'Choose an answer first.';
+            return;
+        }
+
+        if (selected.value === 'b') {
+            quizResult.className = 'mcq-result show ok';
+            quizResult.textContent = 'Correct. Submit all tasks first, store the Futures, then collect results later with get().';
+        } else {
+            quizResult.className = 'mcq-result show nope';
+            quizResult.textContent = 'Not quite. Calling get() too early blocks the current thread and reduces concurrency.';
+        }
+    });
+
+    resetQuizBtn.addEventListener('click', () => {
+        const selected = document.querySelector('input[name="q1"]:checked');
+
+        if (selected) {
+            selected.checked = false;
+        }
+
+        quizResult.className = 'mcq-result';
+        quizResult.textContent = '';
+    });
+</script>
+</body>
+</html>
